@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets - never commit
+.env
+
+# Large / generated files (data is versioned by DVC, models by MLflow)
+/models/*.keras
+/models/*.h5
+mlruns/
+mlartifacts/
+tuner_runs/
+*.log
+
+# Assignment brief + report drafts
+Assignment 2.pdf
+outputs/

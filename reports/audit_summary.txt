@@ -1,0 +1,34 @@
+=== Files per class ===
+           total  readable  duplicates
+class                                 
+AiArtData    539       539           1
+RealArt      436       436           0
+
+=== Width / height / file size (readable files) ===
+          width               height              file_size_kb                  
+            min  median   max    min median   max          min   median      max
+class                                                                           
+AiArtData   225  1024.0  6000    135  800.0  4001        11.46  195.080  5494.32
+RealArt     183   920.0  8495    158  720.0  7091        11.05  141.445  9956.40
+
+=== Overall ===
+         width  height  file_size_kb
+min      183.0   135.0         11.05
+median  1024.0   768.0        165.13
+max     8495.0  7091.0       9956.40
+
+=== Colour modes ===
+mode       L   P  RGB  RGBA
+class                      
+AiArtData  1  14  489    35
+RealArt    6   9  407    14
+
+=== Formats ===
+format     JPEG  PNG
+class               
+AiArtData   429  110
+RealArt     403   33
+
+Corrupt / unreadable files: 0
+Exact duplicate files (extra copies): 1
+Duplicate groups spanning BOTH classes: 0
