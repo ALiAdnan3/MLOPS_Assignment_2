@@ -1,5 +1,7 @@
 # 23L0839_A2_Ops – VisionGuard
 
+[![CI](https://github.com/ALiAdnan3/MLOPS_Assignment_2/actions/workflows/ci.yml/badge.svg)](https://github.com/ALiAdnan3/MLOPS_Assignment_2/actions/workflows/ci.yml)
+
 VisionGuard tells whether an uploaded image is **AI-generated** or **real** (human-made photo / art).
 TensorFlow/Keras model · MLflow + DagsHub tracking · DVC data versioning · Flask app · database request log · Docker Compose · cloud API.
 

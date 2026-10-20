@@ -14,7 +14,6 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import tensorflow as tf  # noqa: E402
 
@@ -23,7 +22,7 @@ from visionguard.preprocess import load_image_path  # noqa: E402
 
 def feature_and_head(model):
     """Return f(x) -> (last conv feature map, p(AI)) that is differentiable w.r.t. the feature map."""
-    names = [l.name for l in model.layers]
+    names = [layer.name for layer in model.layers]
     if "backbone" in names:                                   # transfer model: nested backbone
         pre = model.get_layer("preprocess") if "preprocess" in names else (lambda t: t)
         base, gap, out = model.get_layer("backbone"), model.get_layer("gap"), model.get_layer("ai_probability")

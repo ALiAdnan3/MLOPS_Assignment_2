@@ -219,7 +219,8 @@ def main():
             compile_model(model, args.lr * args.fine_tune_lr_factor)  # recompile after changing trainable
             stage_info["stage2_trainable"] = [w.path for w in model.trainable_weights]
             best1 = min(histories[0].history["val_loss"])
-            cbs = callbacks(ckpt, args.patience, best1) +([MLflowEpochLogger(offset=n1)] if args.mlflow == "manual" else [])
+            cbs = callbacks(ckpt, args.patience, best1)
+            cbs += [MLflowEpochLogger(offset=n1)] if args.mlflow == "manual" else []
             histories.append(model.fit(train_ds, validation_data=val_ds, initial_epoch=n1,
                                        epochs=n1 + args.fine_tune_epochs, callbacks=cbs))
     (out / "trainable_layers.json").write_text(json.dumps(stage_info, indent=1))

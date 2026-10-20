@@ -31,8 +31,8 @@ def main(run_dir):
         with Image.open(r.path) as im:
             ax.imshow(im.convert("RGB"))
         truth = "AI" if r.label == 1 else "Real"
-        ax.set_title(f"#{i} true={truth}  p(AI)={r.prob_ai:.2f}\n{r.width}x{r.height} {r.format} {r.file_size_kb:.0f}KB",
-                     fontsize=9, color="darkred")
+        ax.set_title(f"#{i} true={truth}  p(AI)={r.prob_ai:.2f}\n"
+                     f"{r.width}x{r.height} {r.format} {r.file_size_kb:.0f}KB", fontsize=9, color="darkred")
         ax.axis("off")
     fig.suptitle(f"{run.name}: 10 most confident test errors (threshold {t})")
     fig.tight_layout()

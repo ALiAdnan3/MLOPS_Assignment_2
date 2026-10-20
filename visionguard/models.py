@@ -83,9 +83,9 @@ def unfreeze_last(model, backbone="mobilenetv2", n_layers=None):
     prefix = BACKBONES[backbone][2]
     base.trainable = True
     if n_layers is None:
-        start = next(i for i, l in enumerate(base.layers) if l.name.startswith(prefix))
+        start = next(i for i, layer in enumerate(base.layers) if layer.name.startswith(prefix))
     else:
         start = len(base.layers) - n_layers
     for i, layer in enumerate(base.layers):
         layer.trainable = i >= start and not isinstance(layer, layers.BatchNormalization)
-    return [l.name for l in base.layers if l.trainable and l.weights]
+    return [layer.name for layer in base.layers if layer.trainable and layer.weights]

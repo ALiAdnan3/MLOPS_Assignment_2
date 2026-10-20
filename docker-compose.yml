@@ -1,0 +1,45 @@
+# Task 6.3 - VisionGuard stack: web app + PostgreSQL.   Usage:  docker compose up -d --build
+name: 23l0839_a2_ops
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:                      # values come from the untracked .env file
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # named volume: history survives container re-creation
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # no "ports:" -> the database is reachable only on the internal Compose network
+
+  web:
+    build: .
+    image: 23l0839_a2_ops-web:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy    # start only after Postgres accepts connections
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      INFERENCE_MODE: ${INFERENCE_MODE:-local}
+      MODEL_PATH: /app/models/champion.keras
+      MODEL_NAME: ${MODEL_NAME:-23L0839_A2_Ops-visionguard}
+      MODEL_VERSION: ${MODEL_VERSION:-champion}
+      THRESHOLD: ${THRESHOLD:-0.5}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-5}
+      MODEL_API_URL: ${MODEL_API_URL:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      PORT: 8000
+    volumes:
+      - ./models:/app/models:ro          # champion model mounted read-only (see report 6.3)
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

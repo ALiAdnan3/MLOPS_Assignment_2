@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Upload{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Is this image AI-generated?</h1>
+  <p class="muted">Upload a photo or artwork. VisionGuard estimates whether it was produced by a generative AI model or made by a human.</p>
+  <form action="{{ url_for('predict') }}" method="post" enctype="multipart/form-data" class="upload">
+    <label class="drop" for="image">
+      <input type="file" id="image" name="image" accept="image/*" required
+             onchange="document.getElementById('fname').textContent = this.files[0] ? this.files[0].name : 'No file chosen'">
+      <span class="drop-title">Choose an image</span>
+      <span id="fname" class="muted">No file chosen</span>
+    </label>
+    <button type="submit" class="btn">Analyse image</button>
+  </form>
+  <p class="hint">Allowed: {{ allowed|join(', ') }} · max {{ '%g'|format(max_mb) }} MB · the image is analysed in memory and never stored.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,9 @@
+# Light dependencies for CI tests/lint (tests use a fake predictor, so TensorFlow is not needed)
+flask==3.1.3
+sqlalchemy==2.1.5
+pillow==13.0.0
+numpy==2.5.4
+requests==2.34.2
+waitress==3.0.2
+pytest==9.1.1
+flake8==7.4.1

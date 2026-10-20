@@ -1,0 +1,8 @@
+{
+ "model_name": "23L0839_A2_Ops-visionguard",
+ "version": "2",
+ "alias": "champion",
+ "run_id": "d7a57b1417b84d348f4fd1d91e84bc95",
+ "run_name": "R4_mnv2_no_augment",
+ "threshold": 0.8
+}

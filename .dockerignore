@@ -1,0 +1,19 @@
+# Keep the build context small and secrets out of the image
+.env
+.env.*
+!.env.example
+.git
+.venv
+.dvc/cache
+.dvc/config.local
+data/
+outputs/
+mlruns/
+mlartifacts/
+tuner_runs/
+reports/
+models/
+*.db
+*.log
+**/__pycache__
+Assignment 2.pdf

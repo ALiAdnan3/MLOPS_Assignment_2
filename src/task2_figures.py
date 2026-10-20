@@ -40,8 +40,8 @@ def augmented_batch():
 
 def layer_table():
     model = build_baseline_cnn()
-    rows = [{"layer": l.name, "type": type(l).__name__, "output_shape": str(l.output.shape),
-             "params": l.count_params()} for l in model.layers]
+    rows = [{"layer": ly.name, "type": type(ly).__name__, "output_shape": str(ly.output.shape),
+             "params": ly.count_params()} for ly in model.layers]
     df = pd.DataFrame(rows)
     df.to_csv("reports/cnn_layers.csv", index=False)
     print(df.to_markdown(index=False))

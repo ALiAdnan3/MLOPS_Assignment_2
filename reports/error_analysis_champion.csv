@@ -1,0 +1,11 @@
+path,label,prob_ai,pred,width,height,file_size_kb,format,mode,confidence_of_error
+data/raw/AiArtData/Screen_Shot_2023-01-22_at_5.33.01_PM.png,1,0.04122149,0,1212,1480,4447.55,PNG,RGBA,0.7587785100000001
+data/raw/AiArtData/240201-airec-main-ksp-5625e8.jpg,1,0.068471245,0,760,380,180.0,JPEG,RGB,0.731528755
+data/raw/AiArtData/Bu69yrI45ueNWQX84ap5.jpg,1,0.0821693,0,1024,768,130.86,JPEG,RGB,0.7178307
+data/raw/AiArtData/Nov20_17_498430921.jpg,1,0.10333121,0,1200,675,1186.32,JPEG,RGB,0.69666879
+data/raw/AiArtData/Midjourney-River.jpg,1,0.13928972,0,1664,1109,1357.92,JPEG,RGB,0.66071028
+data/raw/AiArtData/ai-cartoon-portraits-01.jpg,1,0.1836646,0,1000,1012,126.94,JPEG,RGB,0.6163354000000001
+data/raw/AiArtData/Boris-Eldagsen-AI-art.jpg,1,0.22114658,0,1068,601,81.15,JPEG,RGB,0.5788534200000001
+data/raw/AiArtData/Kai-painting-2023.png,1,0.2822835,0,2042,1118,1426.02,PNG,P,0.5177165
+data/raw/AiArtData/ai-generated-8067660_1280.jpg,1,0.2836274,0,1280,905,414.42,JPEG,RGB,0.5163726000000001
+data/raw/AiArtData/HD-wallpaper-ai-landscape-2023-digital-art.jpg,1,0.3402161,0,800,459,48.89,JPEG,RGB,0.4597839

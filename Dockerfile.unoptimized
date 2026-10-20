@@ -1,0 +1,8 @@
+# Task 6.4 "before" image - deliberately naive, used only to measure the size difference.
+FROM python:3.13
+WORKDIR /app
+COPY requirements-serve.txt .
+RUN sed -i 's/^tensorflow-cpu==/tensorflow==/' requirements-serve.txt && pip install -r requirements-serve.txt
+COPY visionguard/ visionguard/
+COPY webapp/ webapp/
+CMD ["python", "-m", "webapp.app"]

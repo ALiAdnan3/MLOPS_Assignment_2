@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Result{% endblock %}
+{% block content %}
+{% set is_ai = r.label == 'AI-generated' %}
+<section class="card result">
+  {% if preview %}<img class="preview" src="{{ preview }}" alt="uploaded image">{% endif %}
+  <div class="verdict-box">
+    <p class="muted">{{ row.filename }}</p>
+    <h1 class="verdict {{ 'ai' if is_ai else 'real' }}">{{ r.label }}</h1>
+    <p class="conf">Confidence <strong>{{ '%.1f'|format(r.confidence * 100) }}%</strong></p>
+    <div class="bar"><div class="fill {{ 'ai' if is_ai else 'real' }}" style="width: {{ (r.confidence * 100)|round(1) }}%"></div></div>
+    <table class="meta">
+      <tr><th>P(AI-generated)</th><td>{{ '%.3f'|format(r.prob_ai) }} (threshold {{ r.threshold }})</td></tr>
+      <tr><th>Model</th><td>{{ r.model_name }} · {{ r.model_version }}</td></tr>
+      <tr><th>Inference</th><td>{{ row.inference_mode }} · {{ row.latency_ms }} ms</td></tr>
+      <tr><th>Logged</th><td>#{{ row.id }} at {{ row.created_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td></tr>
+    </table>
+    <p class="caveat">⚠ {{ caveat }}</p>
+    <a class="btn" href="{{ url_for('index') }}">Analyse another image</a>
+  </div>
+</section>
+{% endblock %}

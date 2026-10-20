@@ -1,0 +1,10 @@
+run,change vs R1,best_epoch,val_loss,val_auc,val_F0.5,threshold,test_acc,test_precision,test_recall,test_f1,test_auc
+R1_mnv2_reference,"reference (MobileNetV2, lr 1e-3, light aug, 224, last block)",23,0.5171,0.8192,0.7971,0.63,0.7415,0.8525,0.642,0.7324,0.8335
+R2_mnv2_autolog,"same as R1, autologging",22,0.4936,0.8541,0.8403,0.65,0.7823,0.8182,0.7778,0.7975,0.8627
+R3_mnv2_lr3e-4,lr 3e-4,30,0.5321,0.815,0.8249,0.75,0.7619,0.8966,0.642,0.7482,0.8481
+R4_mnv2_no_augment,no augmentation,26,0.4446,0.8746,0.8532,0.8,0.7143,0.8679,0.5679,0.6866,0.8601
+R5_mnv2_strong_augment,strong augmentation,23,0.4515,0.8591,0.8421,0.75,0.7483,0.8667,0.642,0.7376,0.8464
+R6_mnv2_frozen_only,frozen backbone only,16,0.5889,0.7666,0.7606,0.46,0.7279,0.7531,0.7531,0.7531,0.8083
+R7_mnv2_img160,image size 160,23,0.4998,0.8399,0.8211,0.68,0.7687,0.8219,0.7407,0.7792,0.8367
+R8_effnetb0,backbone EfficientNetB0,27,0.4607,0.8648,0.8308,0.77,0.7755,1.0,0.5926,0.7442,0.884
+R9_baseline_cnn,baseline CNN from scratch,16,0.5523,0.7736,0.7527,0.47,0.6735,0.6667,0.8148,0.7333,0.7422
