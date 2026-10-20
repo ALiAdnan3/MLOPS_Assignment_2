@@ -17,3 +17,5 @@ tuner_runs/
 # Assignment brief + report drafts
 Assignment 2.pdf
 outputs/
+mlflow_local.db
+.dvc/config.local

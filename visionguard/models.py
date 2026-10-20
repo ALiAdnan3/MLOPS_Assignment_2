@@ -30,7 +30,9 @@ def compile_model(model, lr):
 
 def conv_block(x, filters, name):
     x = layers.Conv2D(filters, 3, padding="same", use_bias=False, name=f"{name}_conv")(x)
-    x = layers.BatchNormalization(name=f"{name}_bn")(x)
+    # momentum 0.9 (default 0.99): with only ~22 batches/epoch the moving mean/variance used at
+    # validation time must converge quickly, otherwise val predictions collapse to one class.
+    x = layers.BatchNormalization(momentum=0.9, name=f"{name}_bn")(x)
     x = layers.ReLU(name=f"{name}_relu")(x)
     return layers.MaxPooling2D(2, name=f"{name}_pool")(x)
 

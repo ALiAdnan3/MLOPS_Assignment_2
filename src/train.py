@@ -72,11 +72,13 @@ def dvc_data_version():
     return "untracked"
 
 
-def callbacks(ckpt_path, patience):
+def callbacks(ckpt_path, patience, best_so_far=None):
+    # best_so_far: stage 2 only overwrites the checkpoint if it beats stage 1's best val_loss
     return [
         tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience, restore_best_weights=True, verbose=1),
-        tf.keras.callbacks.ModelCheckpoint(ckpt_path, monitor="val_loss", save_best_only=True, verbose=0),
-        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.3, patience=2, min_lr=1e-7, verbose=1),
+        tf.keras.callbacks.ModelCheckpoint(ckpt_path, monitor="val_loss", save_best_only=True, verbose=0,
+                                           initial_value_threshold=best_so_far),
+        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.3, patience=3, min_lr=1e-7, verbose=1),
     ]
 
 
@@ -208,15 +210,16 @@ def main():
         histories.append(model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, callbacks=cbs))
     else:
         model = compile_model(build_transfer_model(args.model, args.img_size, dropout=args.dropout), args.lr)
-        stage_info["stage1_trainable"] = [w.name for w in model.trainable_weights]
+        stage_info["stage1_trainable"] = [w.path for w in model.trainable_weights]
         cbs = callbacks(ckpt, args.patience) + ([MLflowEpochLogger()] if args.mlflow == "manual" else [])
         histories.append(model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, callbacks=cbs))
         if not args.no_fine_tune:
             n1 = len(histories[0].history["loss"])
             stage_info["stage2_unfrozen_backbone_layers"] = unfreeze_last(model, args.model, args.unfreeze_layers)
             compile_model(model, args.lr * args.fine_tune_lr_factor)  # recompile after changing trainable
-            stage_info["stage2_trainable"] = [w.name for w in model.trainable_weights]
-            cbs = callbacks(ckpt, args.patience) + ([MLflowEpochLogger(offset=n1)] if args.mlflow == "manual" else [])
+            stage_info["stage2_trainable"] = [w.path for w in model.trainable_weights]
+            best1 = min(histories[0].history["val_loss"])
+            cbs = callbacks(ckpt, args.patience, best1) +([MLflowEpochLogger(offset=n1)] if args.mlflow == "manual" else [])
             histories.append(model.fit(train_ds, validation_data=val_ds, initial_epoch=n1,
                                        epochs=n1 + args.fine_tune_epochs, callbacks=cbs))
     (out / "trainable_layers.json").write_text(json.dumps(stage_info, indent=1))
@@ -265,5 +268,6 @@ def main():
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # MLflow prints emoji; Windows console is cp1252
+    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
     main()
