@@ -374,8 +374,10 @@ Order of instructions and why:
 
 | Image | Base | TF package | pip cache | Size on disk | Compressed (pushed) |
 |---|---|---|---|---|---|
-| before – `Dockerfile.unoptimized` | `python:3.13` (full Debian) | `tensorflow` | kept | BEFORE_SIZE | |
+| before – `Dockerfile.unoptimized` | `python:3.13` (full Debian) | `tensorflow` | kept | **5.88 GB** | **1.74 GB** |
 | after – `Dockerfile` | `python:3.13-slim` | `tensorflow-cpu` | `--no-cache-dir` | **2.22 GB** | **421 MB** |
+
+Where the 5.88 GB came from (`docker history` of the before image): the pip layer alone is 2.95 GB – full `tensorflow` is 1.9 GB installed (vs 1.3 GB for `tensorflow-cpu`) and the kept pip download cache adds **629 MB** of wheel files that are never used again; the full `python:3.13` base adds ~1.1 GB of compilers and build tools (layers of 695 MB, 202 MB, 134 MB). It also runs as root. **Result: 5.88 GB → 2.22 GB on disk (−62 %) and 1.74 GB → 421 MB to push/pull (−76 %).**
 
 Optimisations applied: slim base, CPU-only TensorFlow, no pip cache, `.dockerignore` (build context ≈ 100 KB instead of ~1.5 GB with data/outputs). Conclusion: almost all of the size is the ML runtime itself, so the biggest wins are choosing the right TF package and base image; further savings would need a multi-stage build that strips TF's unused parts or a different runtime (e.g. TFLite / ONNX Runtime, ~50 MB) for serving.
 📸 Fig 6.4 `docker images` with both tags + `docker history`.
