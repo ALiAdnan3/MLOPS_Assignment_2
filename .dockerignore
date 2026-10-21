@@ -12,7 +12,8 @@ mlruns/
 mlartifacts/
 tuner_runs/
 reports/
-models/
+models/*
+!models/champion.keras
 *.db
 *.log
 **/__pycache__

@@ -1,0 +1,133 @@
+{
+ "info": {
+  "name": "23L0839_A2_Ops VisionGuard API",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+  "description": "Task 7 - VisionGuard model API on Azure Container Apps"
+ },
+ "variable": [
+  {
+   "key": "base_url",
+   "value": "https://vg-23l0839-a2-ops-api.gentleglacier-7f267617.eastus.azurecontainerapps.io"
+  },
+  {
+   "key": "api_key",
+   "value": "PASTE_MODEL_API_KEY_FROM_.env"
+  }
+ ],
+ "item": [
+  {
+   "name": "1 Health",
+   "request": {
+    "method": "GET",
+    "url": "{{base_url}}/health"
+   },
+   "event": [
+    {
+     "listen": "test",
+     "script": {
+      "exec": [
+       "pm.test('200 OK', () => pm.response.to.have.status(200));",
+       "pm.test('model loaded', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "2 Predict AI image",
+   "request": {
+    "method": "POST",
+    "header": [
+     {
+      "key": "X-API-Key",
+      "value": "{{api_key}}"
+     }
+    ],
+    "body": {
+     "mode": "formdata",
+     "formdata": [
+      {
+       "key": "image",
+       "type": "file",
+       "src": "D:/LOPS assignment2/data/raw/AiArtData/15G9ADdejiQlTQc0UxNt3Cg.png"
+      }
+     ]
+    },
+    "url": "{{base_url}}/predict"
+   },
+   "event": [
+    {
+     "listen": "test",
+     "script": {
+      "exec": [
+       "pm.test('200', () => pm.response.to.have.status(200));",
+       "pm.test('label AI', () => pm.expect(pm.response.json().label).to.eql('AI-generated'));"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "3 Predict real image",
+   "request": {
+    "method": "POST",
+    "header": [
+     {
+      "key": "X-API-Key",
+      "value": "{{api_key}}"
+     }
+    ],
+    "body": {
+     "mode": "formdata",
+     "formdata": [
+      {
+       "key": "image",
+       "type": "file",
+       "src": "D:/LOPS assignment2/data/raw/RealArt/people-taking-selfie-together-registration-day_23-2149096795.jpg"
+      }
+     ]
+    },
+    "url": "{{base_url}}/predict"
+   },
+   "event": [
+    {
+     "listen": "test",
+     "script": {
+      "exec": [
+       "pm.test('200', () => pm.response.to.have.status(200));",
+       "pm.test('label Real', () => pm.expect(pm.response.json().label).to.eql('Real'));"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "4 Predict WITHOUT API key (expect 401)",
+   "request": {
+    "method": "POST",
+    "header": [],
+    "body": {
+     "mode": "formdata",
+     "formdata": [
+      {
+       "key": "image",
+       "type": "file",
+       "src": "D:/LOPS assignment2/data/raw/AiArtData/15G9ADdejiQlTQc0UxNt3Cg.png"
+      }
+     ]
+    },
+    "url": "{{base_url}}/predict"
+   },
+   "event": [
+    {
+     "listen": "test",
+     "script": {
+      "exec": [
+       "pm.test('401 unauthorized', () => pm.response.to.have.status(401));"
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

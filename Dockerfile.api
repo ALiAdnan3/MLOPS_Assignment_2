@@ -1,0 +1,30 @@
+# VisionGuard model API for the cloud (Task 7). The champion model is BAKED IN:
+# a managed container service has no convenient shared disk, and an immutable image
+# guarantees the deployed model is exactly the one that was tested.
+# The first instructions are identical to ./Dockerfile so both images share the cached
+# dependency layer (TensorFlow is downloaded only once).
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TF_CPP_MIN_LOG_LEVEL=2
+
+WORKDIR /app
+
+COPY requirements-serve.txt .
+RUN pip install --no-cache-dir -r requirements-serve.txt
+
+RUN useradd --create-home --uid 10001 appuser
+
+COPY visionguard/ visionguard/
+COPY api/ api/
+COPY models/champion.keras models/champion.keras
+
+USER appuser
+ENV PORT=8080 MODEL_PATH=/app/models/champion.keras
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)" || exit 1
+CMD ["python", "-m", "api.app"]
