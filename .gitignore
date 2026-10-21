@@ -19,3 +19,6 @@ Assignment 2.pdf
 outputs/
 mlflow_local.db
 .dvc/config.local
+reports/*.docx
+reports/*.pdf
+~$*.docx

@@ -368,3 +368,102 @@ Order of instructions and why:
 - **Secrets:** `POSTGRES_USER/PASSWORD/DB`, thresholds etc. are interpolated from the untracked `.env`; `.env.example` documents every variable with placeholder values.
 - **Model file: mounted**, read-only: `./models:/app/models:ro`. `python -m src.registry fetch` places the `@champion` from the DagsHub registry in `./models` once. Justification: the model changes independently of the code – promoting a new champion is "fetch + `docker compose restart web`" without rebuilding a 1.6 GB image, and the same image can serve any model version; `:ro` prevents the app from altering it. (For the cloud API the opposite choice – baking it in – is made, see Task 7.)
 📸 Figs 6.3a compose file on GitHub, 6.3b `docker compose ps` (both healthy), 6.3c port 5432 closed.
+
+### 6.4 Image analysis
+`docker history 23l0839_a2_ops-web` – the largest layer by far is `RUN pip install -r requirements-serve.txt` = **1.66 GB** (inside it, `site-packages/tensorflow` alone is 1.3 GB, then clang 62 MB, numpy 43 MB, keras 30 MB, sqlalchemy 28 MB). The base `python:3.13-slim` layers are ~120 MB; our code layers are < 0.1 MB each.
+
+| Image | Base | TF package | pip cache | Size on disk | Compressed (pushed) |
+|---|---|---|---|---|---|
+| before – `Dockerfile.unoptimized` | `python:3.13` (full Debian) | `tensorflow` | kept | BEFORE_SIZE | |
+| after – `Dockerfile` | `python:3.13-slim` | `tensorflow-cpu` | `--no-cache-dir` | **2.22 GB** | **421 MB** |
+
+Optimisations applied: slim base, CPU-only TensorFlow, no pip cache, `.dockerignore` (build context ≈ 100 KB instead of ~1.5 GB with data/outputs). Conclusion: almost all of the size is the ML runtime itself, so the biggest wins are choosing the right TF package and base image; further savings would need a multi-stage build that strips TF's unused parts or a different runtime (e.g. TFLite / ONNX Runtime, ~50 MB) for serving.
+📸 Fig 6.4 `docker images` with both tags + `docker history`.
+
+### 6.5 Operations and troubleshooting (`scripts/docker_ops_demo.ps1`)
+Demonstrated `docker compose up -d`, `ps`, `stop`, `start`, `restart web`, `logs --tail` for both services, `exec web sh` (shows `appuser`, `/app/models/champion.keras`) and `exec db psql` (shows the predictions table).
+**Deliberate failure:** the web service was started with a wrong database password (`$env:POSTGRES_PASSWORD="wrong-password"`; a shell variable overrides `.env` for Compose interpolation).
+**Symptoms:** `docker compose ps` → web keeps restarting / `health: starting`.
+**Diagnosis from logs only:**
+```
+web-1 | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "db" (172.18.0.2),
+        port 5432 failed: FATAL:  password authentication failed for user "visionguard"
+db-1  | 2026-10-20 20:03:07.738 UTC [47] FATAL:  password authentication failed for user "visionguard"
+```
+The web log proves the network path to `db:5432` works (the server answered) and the failure is authentication; the db log confirms the server rejected the password. Subtle point: the db container was recreated with the wrong `POSTGRES_PASSWORD` too, but Postgres only applies that variable when it **initialises an empty volume** – the existing `pgdata` volume kept the original password, so the mismatch remained.
+**Fix:** remove the override (`Remove-Item Env:\POSTGRES_PASSWORD`) so the value from `.env` is used, `docker compose up -d web` → both services `healthy`, `/health` → `"database":"ok"`; the previous history rows were still in the volume.
+📸 Figs 6.5a–e (one per pause of the script).
+
+### 6.6 GitHub Actions (CI)
+**Toy part** – throwaway repo https://github.com/ALiAdnan3/23L0839_A2_Ops_ci_toy with `calc.py`, `test_calc.py` and `.github/workflows/tests.yml` (trigger `on: push`, `strategy.matrix.python-version: ["3.11", "3.12"]`, steps checkout → setup-python → `pip install pytest` → `pytest -v`). Run history: ✅ initial commit → ❌ "Introduce a bug on purpose" (`add` returned `a - b`, `assert -1 == 5` failed on both Python versions) → ✅ "Fix the bug".
+**Apply** – `.github/workflows/ci.yml` in the project: job `lint-and-test` (Python 3.13, `pip install -r requirements-ci.txt`, `flake8`, `pytest -v` – 7 tests, using a fake predictor and temporary SQLite so CI needs no model or TensorFlow), then job `docker-build` (`needs: lint-and-test`) builds the web image and prints its size and the non-root `id`. First run green. Status badge at the top of `README.md`.
+**Secrets:** stored in GitHub → repository *Settings → Secrets and variables → Actions* (encrypted, write-only, masked as `***` in logs) and referenced as `${{ secrets.NAME }}` (e.g. a DagsHub token to fetch the champion model, or registry credentials to push the image). They must never be written in the workflow file because that file is committed – anyone who can read the repo (here: the public) would get the credential, and it would stay in Git history forever even after deletion.
+📸 Figs 6.6a toy runs list (✅❌✅), 6.6b red job log, 6.6c green matrix, 6.6d project CI run, 6.6e badge in README.
+
+---
+
+## Task 7 – API Deployment (pathway C: Microsoft Azure)
+
+**Live API URL:** `https://vg-23l0839-a2-ops-api.gentleglacier-7f267617.eastus.azurecontainerapps.io`
+- `GET /health` (public) → model name/version, threshold
+- `POST /predict` (multipart field `image`, header `X-API-Key: <key>`) → `{"label","confidence","prob_ai","threshold","model_name","model_version","latency_ms"}`
+
+**Research first (what shaped the design):**
+- *Free terms:* new Azure account = USD 200 credit for 30 days; Container Apps consumption plan includes a monthly free grant (180 000 vCPU-s, 360 000 GiB-s, 2 M requests). With `min-replicas 0` the app scales to zero when idle, so cost ≈ 0; the price is a **cold start** (first request after idle took ~15 s: container start + TensorFlow import + model load). Azure Container Registry Basic costs ~USD 0.17/day from the credit.
+- *Free-trial limitation found:* `az acr build` (ACR Tasks, cloud-side image build) is **not permitted** on free-trial subscriptions (`TasksOperationsNotAllowed`) → image built locally and pushed with `docker push`.
+- *Mapping Compose → Azure:*
+
+| Compose element | Azure equivalent |
+|---|---|
+| image built by `docker compose build` | image in **Azure Container Registry** `acr23l0839a2ops.azurecr.io/23l0839-a2-ops-api:v2` |
+| service container | **Container App** `vg-23l0839-a2-ops-api` (1 vCPU, 2 GiB, 0–1 replicas) |
+| Compose network + `ports: "8000:8000"` | Container Apps **environment** `env-23l0839-a2-ops` + **ingress** (external HTTPS 443 → target port 8080, TLS certificate managed by Azure) |
+| `.env` / `environment:` | Container App **secrets** (`api-key`) + env vars (`API_KEY=secretref:api-key`, `THRESHOLD=0.8`, `MODEL_VERSION=v2@champion`) |
+| `docker compose logs` | Log Analytics workspace / `az containerapp logs show` |
+| `restart: unless-stopped`, HEALTHCHECK | platform restarts + autoscaling (scale rule on HTTP requests) |
+| db service + named volume | stays on the local machine (Task 8 runs Flask + DB locally); managed equivalent would be Azure Database for PostgreSQL Flexible Server |
+
+- *Model delivery:* the champion `.keras` is **baked into** the API image (`Dockerfile.api`): Container Apps has no simple shared disk, and an immutable image guarantees that what was tested is what runs; a new model = new image tag + new revision.
+- *Security:* the API requires `X-API-Key`, compared with `hmac.compare_digest` (constant time); the key is an Azure secret, never in the image or Git. HTTPS only. Upload size limited to 5 MB; non-image files rejected (415/422).
+
+**Step-by-step deployment (commands run, Azure CLI 2.91):**
+1. `az login` (browser sign-in) → subscription "Azure subscription 1".
+2. `az provider register -n Microsoft.App / Microsoft.OperationalInsights / Microsoft.ContainerRegistry` – enable the services on a new subscription.
+3. `az group create -n 23L0839_A2_Ops -l eastus` – resource group named after the project.
+4. `az acr create -n acr23l0839a2ops -g 23L0839_A2_Ops --sku Basic --admin-enabled true` – private image registry (name must be alphanumeric).
+5. `python -m src.registry fetch` – download the `@champion` model from DagsHub into `models/`.
+6. `docker build -f Dockerfile.api -t acr23l0839a2ops.azurecr.io/23l0839-a2-ops-api:v2 .` (7 s, reuses the cached TF layer) → local smoke test (`/health`, `/predict` with/without key).
+7. `az acr login -n acr23l0839a2ops` + `docker push …:v2` (retried after a DNS drop on the home connection; already-pushed layers are skipped).
+8. `az containerapp env create -n env-23l0839-a2-ops -g 23L0839_A2_Ops -l eastus` – managed environment (+ Log Analytics workspace).
+9. `az containerapp create -n vg-23l0839-a2-ops-api … --image …:v2 --registry-server … --target-port 8080 --ingress external --cpu 1.0 --memory 2.0Gi --min-replicas 0 --max-replicas 1 --secrets api-key=<key> --env-vars API_KEY=secretref:api-key THRESHOLD=0.8 MODEL_VERSION=v2@champion …` → prints the public FQDN.
+10. Verify: `curl https://…/health`; Postman collection `postman/23L0839_A2_Ops_VisionGuard.postman_collection.json`.
+📸 Figs 7.1 resource group in Azure portal, 7.2 ACR repository with tag v2, 7.3 Container App overview (URL, running), 7.4 env vars/secrets page (values hidden), 7.5 log stream.
+
+**Postman results** (collection with tests):
+
+| Request | Status | Result |
+|---|---|---|
+| GET /health | 200 (15.4 s cold start, then < 1 s) | `status ok`, `model_version v2@champion`, `threshold 0.8` |
+| POST /predict – AI image | 200 | `AI-generated`, confidence 0.9994, latency 256 ms |
+| POST /predict – real image | 200 | `Real`, confidence 0.9919, P(AI) 0.0081 |
+| POST /predict – no key | **401** | `{"error":"missing or invalid X-API-Key"}` |
+📸 Figs 7.6a–d Postman (each request + test results). **Tested from another network:** open the `/health` URL on a phone using mobile data (Wi-Fi off) – 📸 Fig 7.7.
+
+---
+
+## Task 8 – Integrating Flask and the API
+The same Flask app runs **on localhost** (Docker Compose `web` + `db`, http://localhost:8000) with `INFERENCE_MODE=remote`, `MODEL_API_URL=https://vg-23l0839-a2-ops-api…azurecontainerapps.io`, `MODEL_API_KEY` from `.env`. In remote mode `create_app()` builds a `RemotePredictor` instead of loading TensorFlow: `POST /predict` validates the upload locally (type, size, decodability, sanitised name), forwards the bytes to the cloud API (`requests.post(…/predict, files=…, headers={"X-API-Key": …}, timeout=60)`), converts the JSON reply with the same `to_result()` and writes the row to Postgres with `inference_mode = "remote"` and the round-trip latency. `/health` also reports the cloud API's health. Errors from the API (timeout, 401, 5xx) are shown as a friendly "Model unavailable" page (503).
+Test with 8 unseen test images through the browser form → Flask → Azure → DB:
+
+| Image | Truth | VisionGuard (remote) | Confidence | Round trip |
+|---|---|---|---|---|
+| images71.jpg | AI | AI-generated | 89.8 % | 1.2 s |
+| Nov20_17_498430921.jpg | AI | **Real** ✗ (half real photo, see 2.6 #4) | 89.7 % | 4.2 s |
+| il_570xN.4588037671_ak6c.jpg | AI | AI-generated | 99.9 % | 1.8 s |
+| 63964cc739abd575d50b68ed_google-not-agai… | AI | AI-generated | 99.8 % | 2.8 s |
+| Portrait197a-1280x640.jpg | Real | Real | 98.3 % | 1.9 s |
+| 1032249.jpg | Real | Real | 97.1 % | 2.9 s |
+| gettyimages-1238924365_wide… | Real | Real | 66.4 % | 2.2 s |
+| pexels-photo-2422290.jpeg | Real | Real | 74.0 % | 3.3 s |
+7/8 correct; round-trip 1–4 s (upload from Pakistan to Azure East US + ~0.26 s model time). The History menu shows these rows with mode `remote` next to the earlier `local` rows.
+📸 Figs 8.1–8.4 several result pages in remote mode (model shown as `remote`), 8.5 History page, 8.6 `/health` showing `inference_mode: remote` and the `model_api` block, 8.7 Azure log stream showing the incoming `predict` requests.
