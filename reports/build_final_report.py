@@ -76,9 +76,9 @@ def add_figure(doc, n, caption, path):
     p.paragraph_format.keep_with_next = True
     with Image.open(ROOT / path) as im:
         w, h = im.size
-    width = min(16.0, w * 0.0265 * 1.15)                   # do not blow small screenshots up
-    if width * h / w > 19.0:                               # keep tall images on one page
-        width = 19.0 * w / h
+    width = min(14.5, w * 0.0265 * 1.0)                   # do not blow small screenshots up
+    if width * h / w > 15.0:                               # keep tall images on one page
+        width = 15.0 * w / h
     p.add_run().add_picture(str(ROOT / path), width=Cm(width))
     cap = doc.add_paragraph()
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
