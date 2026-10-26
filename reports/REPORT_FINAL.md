@@ -35,19 +35,19 @@
 
 ![label=grid; Eight random images per class](reports/figures/sample_grid.png)
 
-{fig:grid}: AI images are polished, saturated portraits and fantasy scenes. The real class also contains human paintings and digital art, so the task is really "AI vs human-made", which is harder than "AI vs photo".
+{fig:grid} – AI images are polished, saturated portraits and fantasy scenes. The real class also contains human paintings and digital art, so the task is really "AI vs human-made", which is harder than "AI vs photo".
 
 ![label=hw; Width per class](reports/figures/hist_width.png)
 
-{fig:hw}: AI widths pile up at 512, 1024 and ~2048 px (typical generator sizes); real widths are spread out with a long tail of large camera photos.
+{fig:hw} – AI widths pile up at 512, 1024 and ~2048 px (typical generator sizes); real widths are spread out with a long tail of large camera photos.
 
 ![label=hh; Height per class](reports/figures/hist_height.png)
 
-{fig:hh}: the same pattern for height – AI heights sit on a few fixed values, real heights vary much more.
+{fig:hh} – the same pattern for height – AI heights sit on a few fixed values, real heights vary much more.
 
 ![label=hs; File size per class (log scale)](reports/figures/hist_file_size.png)
 
-{fig:hs}: both classes overlap between 100 KB and 1 MB, but the real class has a cluster of tiny 10–20 KB thumbnails – a weak signal I do not want the model to rely on.
+{fig:hs} – both classes overlap between 100 KB and 1 MB, but the real class has a cluster of tiny 10–20 KB thumbnails – a weak signal I do not want the model to rely on.
 
 - **Problems:** None – but the sample grid changed my view of the task (paintings are in the real class).
 
@@ -59,23 +59,23 @@
 4. DagsHub remote (`dvc remote add -d origin s3://dvc`, token stored with `--local` so it is never committed), `git push` + `dvc push`.
 5. Deleted the CSV and the whole cache, `dvc pull` → the file came back.
 
-{fig:dvc1}: step 1 – Git and DVC initialised in the empty toy folder and the small CSV created.
+{fig:dvc1} – step 1 – Git and DVC initialised in the empty toy folder and the small CSV created.
 
 ![label=dvc1; Toy: git init, dvc init, small CSV](screenshots/Task1_img_2.png)
 
-{fig:dvc2}: the pointer file `students.csv.dvc` holds only the MD5, size and path; Git commits the pointer and the `.gitignore`.
+{fig:dvc2} – the pointer file `students.csv.dvc` holds only the MD5, size and path; Git commits the pointer and the `.gitignore`.
 
 ![label=dvc2; Toy: pointer file and first commit](screenshots/Task1_img_3.png)
 
-{fig:dvc3}: after `dvc add` of the changed file the MD5 changes; `git log` shows both versions and `dvc checkout` restores the 2-row version.
+{fig:dvc3} – after `dvc add` of the changed file the MD5 changes; `git log` shows both versions and `dvc checkout` restores the 2-row version.
 
 ![label=dvc3; Toy: second version, git log, back to version 1](screenshots/Task1_img_4.png)
 
-{fig:dvc4}: the DagsHub remote is configured (token hidden) and the commits are pushed with `git push`.
+{fig:dvc4} – the DagsHub remote is configured (token hidden) and the commits are pushed with `git push`.
 
 ![label=dvc4; Toy: DagsHub remote configured and git push](screenshots/Task1_img_5.png)
 
-{fig:dvc5}: after deleting the data and the cache, `dvc pull` downloads the file again from DagsHub.
+{fig:dvc5} – after deleting the data and the cache, `dvc pull` downloads the file again from DagsHub.
 
 ![label=dvc5; Toy: data and cache deleted, dvc pull restores it](screenshots/Task1_img_6.png)
 
@@ -436,6 +436,7 @@ db-1  | FATAL:  password authentication failed for user "visionguard"
 ```
 - **Diagnosis:** the DB answered (network OK) but refused the password; Postgres only applies `POSTGRES_PASSWORD` when it creates a new volume, so the old password stayed.
 - **Fix:** removed the wrong variable, recreated web → healthy, history still there.
+- **Problems:** the deliberate wrong password above was the problem of this sub-task – diagnosed only from the logs and fixed as described.
 
 {fig:ops3} shows the state after the fix.
 
