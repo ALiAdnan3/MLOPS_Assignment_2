@@ -275,13 +275,17 @@ One base template with menu **Upload · History · Health**; the result page sho
 
 - **Image** – read-only template a container is created from. **Container** – a running instance with its own writable layer. **Layer** – the result of one Dockerfile instruction, cached and shared. **Volume** – storage outside the container that survives its deletion. **Port mapping** – forwards a host port to a container port.
 
-### 6.2 Dockerfile ([link](https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/Dockerfile))
+### 6.2 Dockerfile for the web app
+Dockerfile: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/Dockerfile
+
 1. `python:3.13-slim` base → 2. `ENV` (no pip cache, unbuffered logs) → 3. copy `requirements-serve.txt` + `pip install` **before** the code: dependencies rarely change, so a code change reuses the cached 1.6 GB layer (rebuild ~7 s) → 4. non-root `appuser` → 5. copy code → 6. `HEALTHCHECK` on `/health` → 7. `CMD`.
 - `.dockerignore` keeps `.env`, `.git`, data and outputs out → no secrets in the image.
 - **`tensorflow-cpu`** (274 MB wheel vs 573 MB for `tensorflow` with unusable GPU code); CPU inference is fast enough.
 - The container runs as `appuser` ({fig:compexec}).
 
-### 6.3 Compose stack ([link](https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/docker-compose.yml))
+### 6.3 Compose stack
+Compose file: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/docker-compose.yml
+
 - Services **web** and **db** (postgres:16-alpine); web reaches the DB by service name `db:5432`.
 - Named volume `pgdata`; `pg_isready` health check + `depends_on: condition: service_healthy`.
 - **DB publishes no port** (only `5432/tcp`, no host mapping); passwords from untracked `.env`, documented in `.env.example`.
