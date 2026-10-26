@@ -12,7 +12,11 @@
 - `scripts/check_env.py` prints the versions: Python 3.13.15, TensorFlow 2.21.0, Keras 3.15.1, MLflow 3.17.1, DVC 3.67.1, Flask 3.1.3.
 - **No GPU visible:** TensorFlow > 2.10 has no GPU support on native Windows and my laptop has no NVIDIA GPU, so I trained on the CPU (fine for ~1 000 images).
 
+{fig:env} shows the versions printed inside my virtual environment.
+
 ![label=env; Exact library versions (scripts/check_env.py)](screenshots/Task1_img_1.png)
+
+- **Problems:** None in the setup itself; the TensorFlow download (~500 MB) was slow on my connection, so I ran the install in the background.
 
 ### 1.2 Dataset audit
 - `src/audit_dataset.py` records class, file size, width, height, colour mode, format and SHA-256 for every file. Each file is opened with Pillow (`verify()` + `load()`); a failure = corrupt. Same SHA-256 = exact duplicate.
@@ -24,6 +28,8 @@
 
 - **Findings:** 20 file extensions are wrong (e.g. `.png` files that are really JPEG) → I use the format detected from the content. Modes include RGBA, palette and greyscale → everything is converted to RGB. Possible shortcuts: 20 % of AI images are PNG (real: 8 %), 14 % of AI images are exactly 512/1024/2048 px wide (real: 3 %).
 - **Splits:** duplicate removed, stratified 70/15/15 with seed 42 → train 681, validation 146, test 147 (`data/splits/*.csv`, committed to Git).
+
+- **Problems:** `ls` first showed 538 / 435 files because it hides file names starting with a dot; the script counted 539 / 436 – I now count with code, not by eye.
 
 ### 1.3 Visual EDA
 
@@ -43,6 +49,8 @@
 
 {fig:hs}: both classes overlap between 100 KB and 1 MB, but the real class has a cluster of tiny 10–20 KB thumbnails – a weak signal I do not want the model to rely on.
 
+- **Problems:** None – but the sample grid changed my view of the task (paintings are in the real class).
+
 ### 1.4 DVC
 **Toy part** (`scripts/dvc_toy_lab.ps1`, new folder `D:\dvc_toy_23L0839`):
 1. `git init`, `dvc init`, small `students.csv`, `dvc add` → DVC moves the file to its cache, writes the pointer `students.csv.dvc` and git-ignores the CSV.
@@ -51,24 +59,40 @@
 4. DagsHub remote (`dvc remote add -d origin s3://dvc`, token stored with `--local` so it is never committed), `git push` + `dvc push`.
 5. Deleted the CSV and the whole cache, `dvc pull` → the file came back.
 
+{fig:dvc1}: step 1 – Git and DVC initialised in the empty toy folder and the small CSV created.
+
 ![label=dvc1; Toy: git init, dvc init, small CSV](screenshots/Task1_img_2.png)
+
+{fig:dvc2}: the pointer file `students.csv.dvc` holds only the MD5, size and path; Git commits the pointer and the `.gitignore`.
 
 ![label=dvc2; Toy: pointer file and first commit](screenshots/Task1_img_3.png)
 
+{fig:dvc3}: after `dvc add` of the changed file the MD5 changes; `git log` shows both versions and `dvc checkout` restores the 2-row version.
+
 ![label=dvc3; Toy: second version, git log, back to version 1](screenshots/Task1_img_4.png)
+
+{fig:dvc4}: the DagsHub remote is configured (token hidden) and the commits are pushed with `git push`.
 
 ![label=dvc4; Toy: DagsHub remote configured and git push](screenshots/Task1_img_5.png)
 
+{fig:dvc5}: after deleting the data and the cache, `dvc pull` downloads the file again from DagsHub.
+
 ![label=dvc5; Toy: data and cache deleted, dvc pull restores it](screenshots/Task1_img_6.png)
+
+{fig:dvc6} shows the toy repository on DagsHub with all three commits and the DVC-tracked CSV.
 
 ![label=dvc6; Toy repository on DagsHub](screenshots/Task1_img_7.png)
 
 **Apply part:** `dvc add data/raw` → `data/raw.dvc` committed to Git; `dvc push` uploaded all 975 images (480 MB) to DagsHub; `dvc status -c` shows cache and remote in sync. Every training run logs this hash as the MLflow tag `dvc_data_version`.
 
+{fig:dvc7} shows the pointer of the real dataset and `dvc status -c` reporting that my cache and the DagsHub remote are in sync.
+
 ![label=dvc7; Real dataset: pointer file and dvc status -c](screenshots/Task1_img_8.png)
 
 - **Pointer file:** MD5 of the data (`.dir` = hash of the list of all file hashes), total size, number of files and path – tiny text that Git can version; DVC uses the hash to fetch the exact bytes.
 - **Why not Git:** Git keeps every version in every clone forever (a 480 MB folder changed a few times = GBs per clone), diffs are for text, and GitHub rejects files > 100 MB.
+
+- **Problems:** PowerShell 5.1 treated git's normal progress messages on stderr as errors and stopped my script, so I switched it to check exit codes instead. Uploading 480 MB to DagsHub took a long time on my connection.
 
 ## Task 2 – Model Development with TensorFlow/Keras
 
@@ -80,18 +104,26 @@
 - **Image size 224:** the input size MobileNetV2/EfficientNetB0 were pre-trained on, and cheap enough for CPU training.
 - **Aspect ratio:** squashed to a square (not preserved). Cropping would cut content and padding would leak the original shape; both classes have the same median ratio (1.5), so squashing affects both equally.
 
+{fig:aug} shows one training batch before and after augmentation (flips, small rotations and zoom).
+
 ![label=aug; One training batch before (top) and after (bottom) augmentation](reports/figures/augmented_batch.png)
+
+- **Problems:** TensorFlow could not decode WEBP/CMYK files, so I used Pillow; palette images with transparency gave a warning, fixed by converting them to RGBA first.
 
 ### 2.2 Baseline CNN
 Rescaling(1/255) → 4 × [Conv2D 3×3 → BatchNorm → ReLU → MaxPool] (32/64/128/256 filters) → GlobalAveragePooling → Dropout 0.4 → Dense 64 → Dense 1 sigmoid (406 369 parameters).
 - **Conv2D** learns edges → textures → parts; **BatchNorm** stabilises training; **MaxPool** halves the size and adds shift tolerance; **GlobalAveragePooling** keeps the head tiny (256 vs 50 176 inputs) → less overfitting; **Dropout** stops reliance on a few features; **sigmoid** outputs P(AI).
 - **Loss:** binary cross-entropy (the right loss for one sigmoid output). **Optimizer:** Adam, lr 1e-3 (adaptive, little tuning). **Metrics:** accuracy, precision, recall (the two errors matter differently) and AUC (threshold-free).
 
+{fig:cnnsum} is the `model.summary()` output; the full table of output shapes and parameters per layer follows.
+
 ![label=cnnsum; model.summary() of the baseline CNN](screenshots/Task2_img_1.png)
 
 CNN_TABLE
 
 - **Problem & fix:** the first run predicted "real" for every validation image (val accuracy stuck at 65/146). BatchNorm uses moving averages at validation time and with momentum 0.99 and only 22 batches/epoch they had not caught up. Momentum 0.9 + more patience fixed it → best epoch 16, test accuracy 0.640, ROC-AUC 0.759.
+
+{fig:cnncurves} shows the fixed baseline: validation loss is lowest at epoch 16 (red line), after which it starts to overfit.
 
 ![label=cnncurves; Baseline CNN curves (best epoch 16 in red)](reports/figures/baseline_cnn_training_curves.png)
 
@@ -102,12 +134,20 @@ CNN_TABLE
 - **Preprocessing:** MobileNetV2 expects pixels in [-1, 1] (x/127.5 − 1); it is a `Rescaling` layer inside the model so serving can never forget it.
 - **Result:** val AUC 0.82 → 0.87 after fine-tuning; test accuracy 0.789, precision 0.891, ROC-AUC 0.872.
 
+{fig:tlcurves} shows both stages: fine-tuning (right of the dotted line) clearly lowers the validation loss.
+
 ![label=tlcurves; MobileNetV2: stage 1 left of the dotted line, fine-tuning right (best epoch 24)](reports/figures/mobilenetv2_tl_training_curves.png)
+
+- **Problems:** In Keras 3 weight names are only `kernel`/`bias`, so I used `weight.path`; the stage-2 checkpoint could have overwritten a better stage-1 model, fixed with `initial_value_threshold`.
 
 ### 2.4 Training discipline
 Seeds fixed (`set_random_seed(42)`); EarlyStopping and ModelCheckpoint on validation loss; ReduceLROnPlateau. Best epochs: CNN 16, MobileNetV2 24, final model R4 **26**.
 
+{fig:r4curves} shows the curves of my final model with the best epoch marked in red.
+
 ![label=r4curves; Final model R4: loss and accuracy with the best epoch (26) marked](reports/figures/R4_mnv2_no_augment_training_curves.png)
+
+- **Problems:** Even with fixed seeds the CPU runs are not exactly repeatable (R1 and R2 differ by 0.035 AUC), so I treat small differences as noise.
 
 ### 2.5 Evaluation
 - **Worse error:** calling a **real photo fake** – it falsely accuses a real photographer or artist. So I want high precision for the "AI" class.
@@ -122,22 +162,36 @@ Seeds fixed (`set_random_seed(42)`); EarlyStopping and ModelCheckpoint on valida
 | F1 | 0.629 | 0.786 | 0.687 |
 | ROC-AUC | 0.759 | 0.872 | 0.860 |
 
+{fig:cm} shows the test confusion matrices – the high thresholds keep the number of real images called AI low.
+
 ![label=cm; Test confusion matrices (CNN, MobileNetV2, R4)](reports/figures/eval_confusion_matrix_3models.png)
+
+{fig:roc} shows the ROC curves; MobileNetV2 and R4 are clearly above the CNN.
 
 ![label=roc; Test ROC curves (CNN, MobileNetV2, R4)](reports/figures/eval_roc_curve_3models.png)
 
+- **Problems:** None; the important rule was to choose the threshold on validation data and touch the test set only once.
+
 ### 2.6 Error analysis
 All 10 most confident errors are AI images called "real" (the error I chose to accept).
+
+{fig:errors} shows the 10 most confident test errors with their size and format.
 
 ![label=errors; The 10 most confident test errors of R4](reports/figures/error_analysis_champion.png)
 
 Hypotheses: (1) screenshot of AI art in Van Gogh style – looks painted; (2) flat pop-art banner – no photo texture; (3) HDR-like landscape; (4) half real photo with an AI effect – questionable label; (5) photorealistic Midjourney landscape; (6) realistic face dominates a cartoon; (7) Eldagsen's prize-winning AI "photo" – fooled human judges too; (8) brush-stroke painting style; (9) digital painting like stock art; (10) 49 KB wallpaper – compression hides generator traces.
 
+- **Problems:** None; several errors come from noisy labels (banners and collages scraped from articles).
+
 ### Bonus – Grad-CAM
+
+{fig:gradcam} shows the input (top) and the regions that drove each prediction (bottom).
 
 ![label=gradcam; Grad-CAM for 4 correct and 4 wrong predictions](reports/figures/gradcam_champion.png)
 
 The model looks at the **main subject** (castle, faces, canvas), not tiny pixel artefacts. The real painting *Girl with a Pearl Earring* is called AI because of its smooth, perfect face – the "AI look". This explains why it fails on paintings and photorealistic fakes.
+
+- **Problems:** The backbone is a nested model, so I computed Grad-CAM by calling the backbone and the head separately inside a `GradientTape`.
 
 ### 2.7 Keras Tuner
 **Toy:** Fashion-MNIST, Dense(units), RandomSearch with 10 trials over units and learning rate.
@@ -153,14 +207,20 @@ APPLY_TABLE
 - **Mattered most:** the **fine-tune learning rate together with the number of unfrozen layers** – with 40 unfrozen layers lr 2.3e-4 was best (0.893) and lr 6.7e-4 worst (0.703); 0 unfrozen layers stayed at 0.78. Dropout had no clear effect.
 - **Overfitting the validation set:** all trials are scored on the same 146 images and I pick the maximum, so part of the winner's score is luck (identical runs differed by 0.035 AUC). Only an untouched test set gives an honest estimate.
 
+- **Problems:** Each trial trains MobileNetV2 on the CPU, so I kept trials short (4 + 6 epochs); short training makes the scores noisier.
+
 ## Task 3 – Experiment Tracking with MLflow and DagsHub
 
 ### 3.1 MLflow locally
 `src/mlflow_toy.py --target local`: tiny Dense net on Fashion-MNIST, two runs (lr 0.001 and 0.01), logging parameters, per-epoch metrics, a loss plot and the model; UI: `mlflow ui --backend-store-uri sqlite:///mlflow_local.db`.
 
+{fig:mlruns} shows the two toy runs in my local MLflow UI.
+
 ![label=mlruns; Local MLflow UI: the two toy runs](screenshots/extra_mlflow_local_runs.png)
 
 ![label=mlrun; Toy run lr 0.001: metrics, parameters, tags and the logged model](screenshots/extra_mlflow_local_run.png)
+
+{fig:mlcompare} compares the two learning rates side by side (parameters and metrics).
 
 ![label=mlcompare; Comparing the two learning rates in the local MLflow UI](screenshots/extra_mlflow_local_compare.png)
 
@@ -171,11 +231,19 @@ APPLY_TABLE
 - Created **ALiAdnan3/23L0839_A2_Ops** on DagsHub, connected to (mirroring) my GitHub repo. Tracking address: `https://dagshub.com/ALiAdnan3/23L0839_A2_Ops.mlflow`.
 - Address + token are in `.env` (`MLFLOW_TRACKING_URI/USERNAME/PASSWORD`), which MLflow reads itself – never in code; `.env` is git-ignored. Repeated the toy run on DagsHub.
 
+{fig:dagshub} shows my DagsHub project with the files mirrored from GitHub.
+
 ![label=dagshub; DagsHub project connected to GitHub](screenshots/Task1_img_9.png)
+
+{fig:toyruns} shows the same two toy runs logged to the DagsHub MLflow server.
 
 ![label=toyruns; Toy runs on the DagsHub MLflow server](screenshots/Task2_img_3.png)
 
+{fig:gitignore} proves that `.env` (and the DVC credentials file) are in `.gitignore`.
+
 ![label=gitignore; .gitignore: .env and the DVC credentials are never committed](screenshots/Task2_img_4.png)
+
+- **Problems:** MLflow prints a 🏃 emoji after each run and the Windows console (cp1252) crashed; fixed by switching output to UTF-8. The repository first came out private and had to be made public.
 
 ### 3.3 Instrumenting VisionGuard training
 - **Manual** (`--mlflow manual`): a Keras callback logs train/val metrics + learning rate every epoch; I also log all hyper-parameters, test metrics, threshold, best epoch and tags `git_commit`, `dvc_data_version`, `seed`.
@@ -185,13 +253,19 @@ APPLY_TABLE
 
 ![label=runs; VisionGuard runs on DagsHub (R2 = autolog, others = manual)](screenshots/Task2_img_2.png)
 
+{fig:autolog} shows the autolog run R2 with the automatically captured metrics plus the ones I added.
+
 ![label=autolog; Autolog run R2 with automatic and manually added metrics](screenshots/Task2_img_5.png)
 
 ### 3.4 Artifacts
 Each run stores the confusion matrix, ROC curve, training curves, split lists, `pip freeze` package list, the `.keras` file and the MLflow model (see the logged model in {fig:mlrun} and the "model" column in {fig:runs}).
 
+- **Problems:** None.
+
 ### 3.5 Experiment comparison
 Each run changes **one** thing compared to R1 (`scripts/run_experiments.sh`).
+
+{fig:compare} shows the DagsHub compare view: each run differs in one parameter (augment, img_size, model, no_fine_tune …).
 
 ![label=compare; Compare view of the run parameters on DagsHub](screenshots/Task2_img_6.png)
 
@@ -210,10 +284,16 @@ Each run changes **one** thing compared to R1 (`scripts/run_experiments.sh`).
 - **Choice: R4** – best on all three **validation** metrics (AUC, F0.5, loss). I did not pick by test AUC (R8), because that would turn the test set into a second validation set.
 - **Caveat:** R1 and R2 are identical yet differ by 0.035 AUC, so R4/R5/R8 are practically tied. Clear findings: fine-tuning > frozen, transfer learning > CNN from scratch.
 
+- **Problems:** In my run script the shared options came after the per-run options, so R9 used 25 epochs / patience 6 instead of 50 / 10 (argparse keeps the last value); it still converged (best epoch 16).
+
 ### 3.6 Model registry
 Registered `23L0839_A2_Ops-visionguard` v1 (R1), **v2 (R4) = `@champion`**, v3 (R8) = `@challenger`. `scripts/predict_champion.py` loads `models:/23L0839_A2_Ops-visionguard@champion` and classifies one image.
 
+{fig:registry} shows the registry with three versions and the aliases @champion and @challenger.
+
 ![label=registry; Model registry: three versions with aliases](screenshots/Task2_img_7.png)
+
+{fig:champion} shows the separate script loading the model by alias from DagsHub and classifying one image.
 
 ![label=champion; Loading the champion by alias and classifying one image](screenshots/Task2_img_8.png)
 
@@ -227,10 +307,16 @@ Registered `23L0839_A2_Ops-visionguard` v1 (R1), **v2 (R4) = `@champion`**, v3 (
 - **Per-request loading is unacceptable:** loading takes 1–8 s, a prediction 0.1–0.5 s.
 - **Preprocessing must match:** a different resize, colour order or scaling gives confident but wrong answers.
 
+{fig:demo} shows the console output: the model is loaded once, then two known images are classified correctly.
+
 ![label=demo; Model loaded once, two known images classified](screenshots/Task4_img_1.png)
+
+- **Problems:** None; the first prediction is slower, which is why one warm-up call runs at start-up.
 
 ### 4.2 Routes and validation
 Routes: `/` upload, `/predict` result, `/history`, `/health`. Rejects wrong type (**415**), > 5 MB (**413**) and undecodable files (**422**); names cleaned with `secure_filename`; the upload stays in memory and is **never written to disk**; friendly error pages.
+
+{fig:e415}, {fig:e413} and {fig:e422} show the three failure cases with friendly error pages.
 
 ![label=e415; Wrong file type (415)](screenshots/extra_error_415.png)
 
@@ -238,8 +324,12 @@ Routes: `/` upload, `/predict` result, `/history`, `/health`. Rejects wrong type
 
 ![label=e422; Image extension but not a readable image (422)](screenshots/extra_error_422.png)
 
+- **Problems:** None – all cases are covered by 7 automated tests that run in CI.
+
 ### 4.3 HTML and CSS
 One base template with menu **Upload · History · Health**; the result page shows verdict, confidence bar, P(AI), threshold, model, inference mode, latency, DB record and a caveat.
+
+{fig:upload} shows the upload page; {fig:resai} and {fig:resreal} show result pages for an AI and a real image.
 
 ![label=upload; Upload page](screenshots/extra_upload_page.png)
 
@@ -247,11 +337,17 @@ One base template with menu **Upload · History · Health**; the result page sho
 
 ![label=resreal; Result: real image](screenshots/Task4_img_3.png)
 
+- **Problems:** None.
+
 ### 4.4 Configuration and production server
 - All settings come from environment variables (model path, threshold, database URL, inference mode, API URL/key) – same code everywhere, no secrets in code.
 - Served by **waitress** with **debug off**: debug mode exposes source code and an interactive console that can run code on the server, and auto-reloads the model.
 
+{fig:health} shows the `/health` response with `debug: false` and the database ok.
+
 ![label=health; /health: database ok, debug false](screenshots/Task4_img_6.png)
+
+- **Problems:** None.
 
 ## Task 5 – Database Trail
 - Every prediction inserts one row into `predictions` (SQLAlchemy, PostgreSQL 16 in Docker, SQLite for tests): **when** (`created_at`), **what** (`label`, `prob_ai`, `threshold`), **how confidently** (`confidence`), **which model** (`model_name`, `model_version`, `inference_mode`), plus file name, SHA-256 and latency.
@@ -261,19 +357,32 @@ One base template with menu **Upload · History · Health**; the result page sho
 
 ![label=hist2; History with record numbers (each opens one record)](screenshots/Task8_img_1.png)
 
+- **Problems:** None; rows 1–2 survived re-creating the db container, which confirmed the named volume works.
+
 ## Task 6 – Containerization with Docker and Docker Compose
 
 ### 6.1 Docker warm-up (`scripts/docker_warmup.ps1`, nginx:alpine)
 
+{fig:w1} shows `docker run` with port mapping and a volume, `docker ps`, and the page served from my mounted folder.
+
 ![label=w1; Run with port mapping (8081:80) and a mounted volume](screenshots/Task6_img_1.png)
+
+{fig:w2} shows `docker logs` with nginx starting and my GET request.
 
 ![label=w2; Container logs](screenshots/Task6_img_2.png)
 
+{fig:w3} shows `docker exec` running commands inside the container.
+
 ![label=w3; Shell inside the container](screenshots/Task6_img_3.png)
+
+{fig:w4} shows `docker ps -a`, `docker stop` and `docker rm`; the image removal with `docker rmi` is in {fig:sizes}.
 
 ![label=w4; Stopping and removing the container](screenshots/Task6_img_5.png)
 
+- **Commands:** `docker pull nginx:alpine` downloads the image; `docker run -d --name warmup-nginx -p 8081:80 -v <folder>:/usr/share/nginx/html:ro nginx:alpine` starts it in the background, maps port 8081 → 80 and mounts my folder read-only; `docker ps` lists running containers; `docker logs` prints the container's output; `docker exec … sh -c "…"` runs commands inside it; `docker stop` / `docker rm` stop and delete the container; `docker images` / `docker rmi` list and delete images.
 - **Image** – read-only template a container is created from. **Container** – a running instance with its own writable layer. **Layer** – the result of one Dockerfile instruction, cached and shared. **Volume** – storage outside the container that survives its deletion. **Port mapping** – forwards a host port to a container port.
+
+- **Problems:** None.
 
 ### 6.2 Dockerfile for the web app
 Dockerfile: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/Dockerfile
@@ -283,6 +392,8 @@ Dockerfile: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/Dockerfile
 - **`tensorflow-cpu`** (274 MB wheel vs 573 MB for `tensorflow` with unusable GPU code); CPU inference is fast enough.
 - The container runs as `appuser` ({fig:compexec}).
 
+- **Problems:** The first build failed with `short read: unexpected EOF` because my connection dropped while downloading TensorFlow; retrying worked.
+
 ### 6.3 Compose stack
 Compose file: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/docker-compose.yml
 
@@ -291,7 +402,11 @@ Compose file: https://github.com/ALiAdnan3/MLOPS_Assignment_2/blob/main/docker-c
 - **DB publishes no port** (only `5432/tcp`, no host mapping); passwords from untracked `.env`, documented in `.env.example`.
 - **Model mounted** read-only (`./models:/app/models:ro`): a new champion only needs fetch + restart, no 2 GB rebuild.
 
+{fig:compose} shows both services healthy, the db with `5432/tcp` and no host mapping, and the stop/start/restart commands.
+
 ![label=compose; Compose start/stop/restart; both healthy, db port not published](screenshots/Task6_img_6.png)
+
+- **Problems:** None.
 
 ### 6.4 Image analysis
 Largest layer: `pip install` (1.66 GB, TensorFlow alone 1.3 GB). Compared with a deliberately bad image (full base, full `tensorflow`, pip cache kept):
@@ -305,7 +420,11 @@ Largest layer: `pip install` (1.66 GB, TensorFlow alone 1.3 GB). Compared with a
 
 **Conclusion:** −62 % on disk, −76 % to download; most of what remains is TensorFlow itself.
 
+- **Problems:** The 'before' build was interrupted by a network drop and had to be restarted.
+
 ### 6.5 Operations and troubleshooting
+
+- **Commands:** `docker compose up -d` creates and starts both services in the background; `ps` shows status and health; `stop` / `start` stop and restart the existing containers (data kept); `restart web` restarts one service; `logs --tail N <service>` shows recent output; `exec <service> sh -c …` runs a command inside a service (`whoami`, `psql`).
 
 ![label=compexec; Shell in web (appuser, mounted model) and psql in db](screenshots/Task6_img_7.png)
 
@@ -318,6 +437,8 @@ db-1  | FATAL:  password authentication failed for user "visionguard"
 - **Diagnosis:** the DB answered (network OK) but refused the password; Postgres only applies `POSTGRES_PASSWORD` when it creates a new volume, so the old password stayed.
 - **Fix:** removed the wrong variable, recreated web → healthy, history still there.
 
+{fig:ops3} shows the state after the fix.
+
 ![label=ops3; Fixed: both healthy, /health database ok](screenshots/Task6_img_8.png)
 
 ### 6.6 GitHub Actions (CI)
@@ -325,9 +446,15 @@ db-1  | FATAL:  password authentication failed for user "visionguard"
 - **VisionGuard** (`.github/workflows/ci.yml`): flake8 + 7 pytest tests, then Docker build; badge in the README.
 - **Secrets** live in GitHub *Settings → Secrets and variables → Actions* (encrypted, masked) and are used as `${{ secrets.NAME }}` – never in the workflow file, because it is public and stays in Git history.
 
+{fig:citoy} shows the three toy runs: green, red (bug on purpose) and green again.
+
 ![label=citoy; Toy CI: green, red, green](screenshots/Task6_img_9.png)
 
+{fig:ciproj} shows that every push of VisionGuard passed CI.
+
 ![label=ciproj; VisionGuard CI: all runs green](screenshots/Task6_img_10.png)
+
+- **Problems:** None – the project workflow was green on the first push.
 
 ## Task 7 – API Deployment (Microsoft Azure, pathway C)
 **API URL:** https://vg-23l0839-a2-ops-api.gentleglacier-7f267617.eastus.azurecontainerapps.io (`GET /health`, `POST /predict` with header `X-API-Key`).
@@ -345,6 +472,8 @@ db-1  | FATAL:  password authentication failed for user "visionguard"
 4. `python -m src.registry fetch` → `docker build -f Dockerfile.api -t acr23l0839a2ops.azurecr.io/23l0839-a2-ops-api:v2 .` → `az acr login` + `docker push`.
 5. `az containerapp env create -n env-23l0839-a2-ops`.
 6. `az containerapp create -n vg-23l0839-a2-ops-api --image …:v2 --target-port 8080 --ingress external --cpu 1.0 --memory 2.0Gi --min-replicas 0 --max-replicas 1 --secrets api-key=… --env-vars API_KEY=secretref:api-key THRESHOLD=0.8 MODEL_VERSION=v2@champion`.
+
+{fig:azure} shows the resource group with all Azure resources of the project.
 
 ![label=azure; Azure resource group: registry, environment, Container App, log workspace](screenshots/Task7_img_1.png)
 
@@ -364,17 +493,27 @@ env:   API_KEY -> secretRef api-key | THRESHOLD=0.8 | MODEL_VERSION=v2@champion 
 4 Predict WITHOUT API key   POST /predict  [401 Unauthorized]  √ 401 unauthorized
 ```
 
+{fig:postman} shows the report of the collection run.
+
 ![label=postman; Postman collection run report: 7 assertions, 0 failed](screenshots/extra_postman_newman.png)
 
 **Tested from other networks:** check-host.net requested `/health` from servers in 4 countries – all got **200 OK in ~0.35 s**.
 
+{fig:networks} shows the check from four other countries.
+
 ![label=networks; API reached from Poland, Russia, Serbia and Sweden](screenshots/extra_other_networks.png)
+
+- **Problems:** The free trial blocks `az acr build`; `az acr build` also ignored my `.dockerignore` and tried to upload 1 GB, so I built locally from a minimal context instead. My connection dropped (DNS error) during `docker push`; retrying skipped the layers already uploaded.
 
 ## Task 8 – Integrating Flask and the API
 - Flask runs **on localhost** (Docker Compose with PostgreSQL) with `INFERENCE_MODE=remote`, `MODEL_API_URL` and `MODEL_API_KEY` (`scripts/set_mode.ps1 remote`).
 - In remote mode Flask validates the upload, sends it to the Azure API with the key, saves the row with `inference_mode = remote` and shows the result; if the API fails the user sees "Model unavailable".
 
+{fig:healthremote} shows `/health` in remote mode, including the status of the cloud API.
+
 ![label=healthremote; /health in remote mode, including the cloud API status](screenshots/extra_health_remote.png)
+
+{fig:remoteresult} shows a result page produced by the cloud model (Inference: remote).
 
 ![label=remoteresult; Result page in remote mode (Inference: remote)](screenshots/extra_remote_result.png)
 
@@ -399,6 +538,8 @@ The same requests arriving in the Azure log (model time ~0.2 s; the rest is the 
 11:48:35 INFO api: predict file=real_2.jpg label=Real prob_ai=0.017 186.7ms
 ```
 The History menu ({fig:hist1}) logs these rows with Mode = remote next to the local ones.
+
+- **Problems:** After changing `INFERENCE_MODE` in `.env` I first forgot to recreate the web container, so some uploads still ran locally (records 13–15). I wrote `scripts/set_mode.ps1` to switch and restart in one step.
 
 ## Conclusion
 - Built the full path from raw data to a cloud API: versioned data, two models, tracked experiments, a registered champion, a validated Flask app with a PostgreSQL trail, a lean Docker setup with CI, and an Azure API used by the local app.
