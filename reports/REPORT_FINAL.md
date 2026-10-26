@@ -556,22 +556,23 @@ The health check in remote mode also shows the cloud API's status:
 | gettyimages-1238924365_wide….jpg | Real | Real | 66.4 % | 2.2 s |
 | pexels-photo-2422290.jpeg | Real | Real | 74.0 % | 3.3 s |
 
-7 of 8 were correct. A second batch of four images on 26 October gave the same answers as the local model (records #16–#19):
+7 of 8 were correct. The **History** menu ({fig:hist1}) shows these rows with Mode = remote next to the rows from local mode, so the database log always tells which predictions came from the cloud.
+
+A second batch of four images on 26 October gave the same answers as the local model (records #16–#19):
 ```
-ai_1.png    -> AI-generated 99.9%  inference: remote | 5851.7 ms   logged #16 at 2026-10-26 11:48:27 UTC
-ai_2.jpg    -> AI-generated 99.9%  inference: remote | 2192.9 ms   logged #17 at 2026-10-26 11:48:30 UTC
-real_1.jpg  -> Real         99.2%  inference: remote | 2109.5 ms   logged #18 at 2026-10-26 11:48:32 UTC
-real_2.jpg  -> Real         98.3%  inference: remote | 1797.5 ms   logged #19 at 2026-10-26 11:48:34 UTC
+ai_1.png   -> AI-generated 99.9%  remote 5852 ms  #16 2026-10-26 11:48:27
+ai_2.jpg   -> AI-generated 99.9%  remote 2193 ms  #17 2026-10-26 11:48:30
+real_1.jpg -> Real         99.2%  remote 2110 ms  #18 2026-10-26 11:48:32
+real_2.jpg -> Real         98.3%  remote 1798 ms  #19 2026-10-26 11:48:34
 ```
-And the same four requests arriving in the Azure log of the Container App (the model itself only needs about 0.2 s; the rest is the upload from Pakistan to the US East data centre):
+The same four requests arriving in the log of the Azure Container App. The model itself only needs about 0.2 s; the rest of the round trip is the upload from Pakistan to the US East data centre (and the first request also woke the app up from zero replicas):
 ```
-2026-10-26 11:47:57 INFO api: model loaded in 0.97s (version v2@champion)
-2026-10-26 11:48:29 INFO api: predict file=ai_1.png label=AI-generated prob_ai=0.999 228.8ms
-2026-10-26 11:48:31 INFO api: predict file=ai_2.jpg label=AI-generated prob_ai=0.999 189.6ms
-2026-10-26 11:48:34 INFO api: predict file=real_1.jpg label=Real prob_ai=0.008 178.2ms
-2026-10-26 11:48:35 INFO api: predict file=real_2.jpg label=Real prob_ai=0.017 186.7ms
+11:47:57 INFO api: model loaded in 0.97s (version v2@champion)
+11:48:29 INFO api: predict file=ai_1.png label=AI-generated prob_ai=0.999 228.8ms
+11:48:31 INFO api: predict file=ai_2.jpg label=AI-generated prob_ai=0.999 189.6ms
+11:48:34 INFO api: predict file=real_1.jpg label=Real prob_ai=0.008 178.2ms
+11:48:35 INFO api: predict file=real_2.jpg label=Real prob_ai=0.017 186.7ms
 ```
-The **History** menu ({fig:hist1}) shows these remote rows (Mode = remote) next to the rows from local mode, so the database log shows which predictions came from the cloud.
 
 [[OPT extra_remote_result.png | Result page in remote mode]]
 [[OPT extra_azure_log_stream.png | Azure log stream with the incoming predict requests]]

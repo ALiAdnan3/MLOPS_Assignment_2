@@ -42,7 +42,7 @@ def tables():
     toy_t = md_table([(r["trial"], f"{float(r['learning_rate']):.5f}", r["units"], f"{float(r['val_accuracy']):.4f}")
                       for r in toy], ["Trial", "Learning rate", "Units", "Val accuracy"])
     app = list(csv.DictReader(open(ROOT / "reports" / "tuner_visionguard.csv")))
-    app_t = md_table([(r["trial"], f"{float(r['fine_tune_lr']):.2e}", r["dropout"], r["unfreeze_layers"],
+    app_t = md_table([(r["trial"], f"{float(r['fine_tune_lr']):.2e}", f"{float(r['dropout']):.1f}", r["unfreeze_layers"],
                        f"{float(r['val_auc']):.4f}") for r in app],
                      ["Trial", "Fine-tune LR", "Dropout", "Unfrozen layers", "Val AUC"])
     return {"CNN_TABLE": cnn_t, "TOY_TABLE": toy_t, "APPLY_TABLE": app_t}
