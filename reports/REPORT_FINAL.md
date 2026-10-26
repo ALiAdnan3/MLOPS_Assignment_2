@@ -353,6 +353,8 @@ One base template with menu **Upload · History · Health**; the result page sho
 - Every prediction inserts one row into `predictions` (SQLAlchemy, PostgreSQL 16 in Docker, SQLite for tests): **when** (`created_at`), **what** (`label`, `prob_ai`, `threshold`), **how confidently** (`confidence`), **which model** (`model_name`, `model_version`, `inference_mode`), plus file name, SHA-256 and latency.
 - The **History** menu shows the newest rows first; data lives in a named volume, so it survives restarts.
 
+{fig:hist1} shows the History menu with every column, including Mode (local or remote); {fig:hist2} shows the record numbers, each of which opens a single record.
+
 ![label=hist1; History: what, when, which model, how confident, local or remote](screenshots/Task4_img_5.png)
 
 ![label=hist2; History with record numbers (each opens one record)](screenshots/Task8_img_1.png)
