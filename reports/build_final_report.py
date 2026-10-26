@@ -149,10 +149,9 @@ def build():
             flush()
         elif s.startswith("## "):
             flush()
-            if not first_h1:
-                page_break(doc)
+            h = doc.add_heading(s[3:].replace("`", ""), level=1)
+            h.paragraph_format.page_break_before = not first_h1   # no blank pages, unlike a break paragraph
             first_h1 = False
-            doc.add_heading(s[3:].replace("`", ""), level=1)
         elif s.startswith("### "):
             flush()
             doc.add_heading(s[4:].replace("`", ""), level=2)
